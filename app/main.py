@@ -1,4 +1,6 @@
 from pathlib import Path
+import asyncio
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +13,7 @@ from app.api.routes.properties import router as properties_router
 from app.api.routes.uploads import router as uploads_router
 from app.core.config import get_settings
 from app.core.database import init_models
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.exceptions import register_exception_handlers
 
 app = FastAPI(title="RentRoom API")
@@ -34,10 +37,35 @@ app.include_router(uploads_router)
 app.include_router(auth_router)
 register_exception_handlers(app)
 
+logger = logging.getLogger(__name__)
+
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    await init_models()
+    last_error: Exception | None = None
+    for attempt in range(1, settings.db_startup_retry_count + 1):
+        try:
+            await init_models()
+            return
+        except (OSError, SQLAlchemyError) as error:
+            last_error = error
+            logger.warning(
+                "Database init failed (%s/%s): %s",
+                attempt,
+                settings.db_startup_retry_count,
+                error,
+            )
+            if attempt < settings.db_startup_retry_count:
+                await asyncio.sleep(settings.db_startup_retry_delay_seconds)
+
+    msg = (
+        "Не удалось подключиться к БД при старте. Проверьте DATABASE_URL и что PostgreSQL запущен. "
+        "Для запуска API без fail-fast выставьте DB_FAIL_FAST_ON_STARTUP=false."
+    )
+    if settings.db_fail_fast_on_startup:
+        raise RuntimeError(msg) from last_error
+
+    logger.error(msg)
 
 
 @app.get("/miniapp", response_class=HTMLResponse)

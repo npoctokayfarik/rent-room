@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     admin_password: str = "admin12345"
     mini_app_url: str = "http://localhost:8000/miniapp"
     upload_dir: str = "uploads"
+    db_startup_retry_count: int = 5
+    db_startup_retry_delay_seconds: float = 1.5
+    db_fail_fast_on_startup: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
