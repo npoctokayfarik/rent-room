@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     db_startup_retry_count: int = 5
     db_startup_retry_delay_seconds: float = 1.5
-    db_fail_fast_on_startup: bool = True
+    db_fail_fast_on_startup: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
