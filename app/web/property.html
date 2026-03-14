@@ -12,90 +12,152 @@
             --muted: #6b7280;
             --accent: #0f766e;
             --border: #d1d5db;
+            --danger: #b91c1c;
         }
+
         body {
             margin: 0;
             font-family: "Segoe UI", Tahoma, sans-serif;
             background: linear-gradient(180deg, #ecfeff 0%, var(--bg) 40%);
             color: var(--text);
         }
+
         .container {
             max-width: 920px;
             margin: 0 auto;
             padding: 16px;
         }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 12px;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
         .card {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 14px;
         }
+
         .muted {
             color: var(--muted);
         }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .stat {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f9fafb;
+        }
+
         .images {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 10px;
             margin-top: 12px;
         }
+
         img {
             width: 100%;
+            min-height: 140px;
             border-radius: 10px;
             border: 1px solid var(--border);
             object-fit: cover;
         }
-        a {
-            color: var(--accent);
+
+        .error {
+            color: var(--danger);
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <a href="/miniapp">Назад к поиску</a>
-    <div id="card" class="card"></div>
+    <a href="/miniapp" class="back">← Назад к поиску</a>
+    <div id="card" class="card">Загрузка...</div>
 </div>
 <script>
-async function load() {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
-    const card = document.getElementById("card");
-    if (!id) {
-        card.innerHTML = "ID не найден.";
-        return;
+    function safeText(value, fallback = "Не указано") {
+        if (value === null || value === undefined) {
+            return fallback;
+        }
+        const text = String(value).trim();
+        return text ? text : fallback;
     }
-    const response = await fetch(`/api/properties/${id}`);
-    if (!response.ok) {
-        const data = await response.json();
-        card.innerHTML = data.error || "Объявление не найдено";
-        return;
+
+    function normalizeImageSrc(path) {
+        if (!path || typeof path !== "string") {
+            return "";
+        }
+        if (path.startsWith("/uploads/")) {
+            return path;
+        }
+        if (path.startsWith("uploads/")) {
+            return `/${path}`;
+        }
+        return "";
     }
-    const data = await response.json();
-    const item = data.item;
 
-    const imagesHtml = (item.images || [])
-        .map((img) => {
-            const src = img.startsWith("/uploads/") ? img : "";
-            if (!src) return "";
-            return `<img src="${src}" alt="property image">`;
-        })
-        .join("");
+    async function loadProperty() {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get("id");
+        const card = document.getElementById("card");
 
-    card.innerHTML = `
-      <h1>${item.title}</h1>
-      <p class="muted">${item.district}, ${item.address}</p>
-      <p>Цена: <strong>${item.price}</strong></p>
-      <p>Комнат: ${item.rooms}</p>
-      <p>Этаж: ${item.floor}/${item.floors_total}</p>
-      <p>Тип: ${item.type}</p>
-      <p>Статус: ${item.status}</p>
-      <p>Контакты: ${item.contact_info || "Не указано"}</p>
-      <p>Условия: ${(item.amenities || []).join(", ") || "Не указано"}</p>
-      <p>${item.description || ""}</p>
-      <div class="images">${imagesHtml}</div>
-    `;
-}
-load();
+        if (!id) {
+            card.innerHTML = "<p class='error'>ID объявления не найден в URL.</p>";
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/properties/${id}`);
+            if (!response.ok) {
+                card.innerHTML = "<p class='error'>Объявление не найдено или backend недоступен.</p>";
+                return;
+            }
+
+            const data = await response.json();
+            const item = data.item;
+
+            const imagesHtml = (item.images || [])
+                .map((img) => normalizeImageSrc(img))
+                .filter(Boolean)
+                .map((src) => `<img src="${src}" alt="Фото квартиры">`)
+                .join("");
+
+            card.innerHTML = `
+                <h1>${safeText(item.title, "Без названия")}</h1>
+                <p class="muted">${safeText(item.district)}, ${safeText(item.address)}</p>
+
+                <div class="grid">
+                    <div class="stat"><strong>Цена</strong><br>${Number(item.price || 0).toLocaleString("ru-RU")} ₽/мес</div>
+                    <div class="stat"><strong>Комнат</strong><br>${safeText(item.rooms)}</div>
+                    <div class="stat"><strong>Этаж</strong><br>${safeText(item.floor)}/${safeText(item.floors_total)}</div>
+                    <div class="stat"><strong>Тип</strong><br>${safeText(item.type)}</div>
+                    <div class="stat"><strong>Статус</strong><br>${safeText(item.status)}</div>
+                </div>
+
+                <p><strong>Контакты:</strong> ${safeText(item.contact_info)}</p>
+                <p><strong>Условия:</strong> ${safeText((item.amenities || []).join(", "))}</p>
+                <p>${safeText(item.description, "Описание отсутствует")}</p>
+
+                <div class="images">${imagesHtml || "<p class='muted'>Фотографии отсутствуют.</p>"}</div>
+            `;
+        } catch (error) {
+            card.innerHTML = "<p class='error'>Ошибка загрузки данных. Проверьте, что backend запущен.</p>";
+            console.error(error);
+        }
+    }
+
+    loadProperty();
 </script>
 </body>
 </html>

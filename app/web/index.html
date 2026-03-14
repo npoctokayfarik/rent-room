@@ -11,19 +11,38 @@
             --text: #111827;
             --muted: #6b7280;
             --accent: #0f766e;
+            --accent-contrast: #ffffff;
             --border: #d1d5db;
+            --danger: #b91c1c;
         }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
             font-family: "Segoe UI", Tahoma, sans-serif;
             background: linear-gradient(180deg, #ecfeff 0%, var(--bg) 40%);
             color: var(--text);
         }
+
         .container {
-            max-width: 920px;
+            max-width: 960px;
             margin: 0 auto;
             padding: 16px;
         }
+
+        .title {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            margin-top: 0;
+            color: var(--muted);
+        }
+
         .filters {
             background: var(--card);
             border: 1px solid var(--border);
@@ -34,94 +53,298 @@
             gap: 10px;
             margin-bottom: 16px;
         }
-        input, select, button {
+
+        input,
+        select,
+        button {
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 9px 10px;
             font-size: 14px;
+            background: #fff;
         }
+
         button {
             cursor: pointer;
             background: var(--accent);
-            color: #fff;
+            color: var(--accent-contrast);
             border: none;
         }
+
+        button.secondary {
+            background: #fff;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar .meta {
+            color: var(--muted);
+        }
+
         .list {
             display: grid;
             gap: 12px;
         }
+
         .item {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 12px;
         }
+
         .item h3 {
             margin: 0 0 8px;
         }
-        .meta {
+
+        .item .description {
             color: var(--muted);
-            margin-bottom: 8px;
+            margin: 6px 0 10px;
         }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            background: #e6fffb;
+            color: var(--accent);
+            border: 1px solid #99f6e4;
+        }
+
         .row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .price {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: var(--danger);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>Поиск квартиры</h1>
+    <h1 class="title">Поиск квартиры</h1>
+    <p class="subtitle">Фронтенд подключен к API: фильтры, сортировка и пагинация работают через `/api/properties`.</p>
+
     <div class="filters">
-        <input id="q" placeholder="Поиск">
+        <input id="q" placeholder="Поиск по названию, адресу, описанию">
         <input id="district" placeholder="Район">
-        <input id="rooms" type="number" placeholder="Комнат">
-        <input id="minPrice" type="number" placeholder="Мин цена">
-        <input id="maxPrice" type="number" placeholder="Макс цена">
+        <input id="rooms" type="number" placeholder="Комнат" min="1">
+        <input id="minPrice" type="number" placeholder="Мин. цена" min="0">
+        <input id="maxPrice" type="number" placeholder="Макс. цена" min="0">
+
+        <select id="type">
+            <option value="">Тип жилья</option>
+            <option value="apartment">Квартира</option>
+            <option value="house">Дом</option>
+            <option value="studio">Студия</option>
+        </select>
+
+        <select id="status">
+            <option value="">Статус</option>
+            <option value="active">Активно</option>
+            <option value="booked">Забронировано</option>
+            <option value="archived">Архив</option>
+        </select>
+
         <select id="sort">
             <option value="newest">Сначала новые</option>
             <option value="price_asc">Цена по возрастанию</option>
             <option value="price_desc">Цена по убыванию</option>
         </select>
+
         <button id="searchBtn">Найти</button>
+        <button id="resetBtn" class="secondary" type="button">Сбросить</button>
     </div>
-    <div id="total"></div>
+
+    <div id="error" class="error"></div>
+
+    <div class="toolbar">
+        <div id="total" class="meta">Найдено: 0</div>
+        <div id="pageInfo" class="meta">Страница 1</div>
+    </div>
+
     <div id="list" class="list"></div>
+
+    <div class="pagination">
+        <button id="prevBtn" type="button" class="secondary">← Назад</button>
+        <button id="nextBtn" type="button" class="secondary">Вперед →</button>
+    </div>
 </div>
+
 <script>
-async function load() {
-    const params = new URLSearchParams();
-    for (const id of ["q", "district", "rooms", "minPrice", "maxPrice", "sort"]) {
-        const value = document.getElementById(id).value.trim();
-        if (value) params.set(id, value);
+    const state = {
+        offset: 0,
+        limit: 6,
+        total: 0,
+    };
+
+    function readFilters() {
+        const params = new URLSearchParams();
+        const fields = ["q", "district", "rooms", "minPrice", "maxPrice", "type", "status", "sort"];
+        for (const id of fields) {
+            const element = document.getElementById(id);
+            const value = element.value.trim();
+            if (value) {
+                params.set(id, value);
+            }
+        }
+        params.set("limit", String(state.limit));
+        params.set("offset", String(state.offset));
+        return params;
     }
-    const response = await fetch(`/api/properties?${params.toString()}`);
-    const data = await response.json();
-    const list = document.getElementById("list");
-    const total = document.getElementById("total");
-    list.innerHTML = "";
-    total.textContent = `Найдено: ${data.total}`;
-    for (const item of data.items) {
-        const card = document.createElement("div");
-        card.className = "item";
-        card.innerHTML = `
-            <h3>${item.title}</h3>
-            <div class="meta">${item.district}, ${item.address}</div>
-            <div class="row">
-                <strong>${item.price}</strong>
-                <button data-id="${item.id}">Открыть</button>
-            </div>
-        `;
-        card.querySelector("button").addEventListener("click", () => {
-            window.location.href = `/miniapp/property?id=${item.id}`;
-        });
-        list.appendChild(card);
+
+    function renderError(message) {
+        const error = document.getElementById("error");
+        if (!message) {
+            error.style.display = "none";
+            error.textContent = "";
+            return;
+        }
+        error.textContent = message;
+        error.style.display = "block";
     }
-}
-document.getElementById("searchBtn").addEventListener("click", load);
-load();
+
+    function renderPagination() {
+        const page = Math.floor(state.offset / state.limit) + 1;
+        const hasPrev = state.offset > 0;
+        const hasNext = state.offset + state.limit < state.total;
+
+        document.getElementById("pageInfo").textContent = `Страница ${page}`;
+        document.getElementById("prevBtn").disabled = !hasPrev;
+        document.getElementById("nextBtn").disabled = !hasNext;
+    }
+
+    function renderItems(items) {
+        const list = document.getElementById("list");
+        list.innerHTML = "";
+
+        if (!items.length) {
+            const empty = document.createElement("div");
+            empty.className = "item";
+            empty.textContent = "По выбранным фильтрам ничего не найдено.";
+            list.appendChild(empty);
+            return;
+        }
+
+        for (const item of items) {
+            const card = document.createElement("article");
+            card.className = "item";
+            card.innerHTML = `
+                <h3>${item.title}</h3>
+                <div class="row">
+                    <span class="badge">${item.type || "apartment"}</span>
+                    <span class="badge">${item.status || "active"}</span>
+                </div>
+                <p class="description">${item.description || "Описание отсутствует"}</p>
+                <div class="meta">${item.district}, ${item.address}</div>
+                <div class="row">
+                    <div>
+                        <div class="price">${Number(item.price).toLocaleString("ru-RU")} ₽/мес</div>
+                        <small>${item.rooms} комн. • ${item.floor}/${item.floors_total} этаж</small>
+                    </div>
+                    <button data-id="${item.id}">Открыть</button>
+                </div>
+            `;
+
+            card.querySelector("button").addEventListener("click", () => {
+                window.location.href = `/miniapp/property?id=${item.id}`;
+            });
+
+            list.appendChild(card);
+        }
+    }
+
+    async function load() {
+        renderError("");
+        const params = readFilters();
+
+        try {
+            const response = await fetch(`/api/properties?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+
+            const data = await response.json();
+            state.total = data.total || 0;
+
+            document.getElementById("total").textContent = `Найдено: ${state.total}`;
+            renderItems(data.items || []);
+            renderPagination();
+        } catch (error) {
+            renderError("Не удалось загрузить объявления. Проверьте backend и попробуйте снова.");
+            document.getElementById("list").innerHTML = "";
+            state.total = 0;
+            document.getElementById("total").textContent = "Найдено: 0";
+            renderPagination();
+            console.error(error);
+        }
+    }
+
+    document.getElementById("searchBtn").addEventListener("click", () => {
+        state.offset = 0;
+        load();
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+        for (const id of ["q", "district", "rooms", "minPrice", "maxPrice", "type", "status", "sort"]) {
+            document.getElementById(id).value = "";
+        }
+        document.getElementById("sort").value = "newest";
+        state.offset = 0;
+        load();
+    });
+
+    document.getElementById("prevBtn").addEventListener("click", () => {
+        state.offset = Math.max(0, state.offset - state.limit);
+        load();
+    });
+
+    document.getElementById("nextBtn").addEventListener("click", () => {
+        if (state.offset + state.limit < state.total) {
+            state.offset += state.limit;
+            load();
+        }
+    });
+
+    load();
 </script>
 </body>
 </html>
