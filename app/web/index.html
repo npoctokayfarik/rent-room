@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аренда квартир</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --card: #ffffff;
+            --text: #111827;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --border: #d1d5db;
+        }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: linear-gradient(180deg, #ecfeff 0%, var(--bg) 40%);
+            color: var(--text);
+        }
+        .container {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        .filters {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        input, select, button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 10px;
+            font-size: 14px;
+        }
+        button {
+            cursor: pointer;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+        }
+        .list {
+            display: grid;
+            gap: 12px;
+        }
+        .item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .item h3 {
+            margin: 0 0 8px;
+        }
+        .meta {
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Поиск квартиры</h1>
+    <div class="filters">
+        <input id="q" placeholder="Поиск">
+        <input id="district" placeholder="Район">
+        <input id="rooms" type="number" placeholder="Комнат">
+        <input id="minPrice" type="number" placeholder="Мин цена">
+        <input id="maxPrice" type="number" placeholder="Макс цена">
+        <select id="sort">
+            <option value="newest">Сначала новые</option>
+            <option value="price_asc">Цена по возрастанию</option>
+            <option value="price_desc">Цена по убыванию</option>
+        </select>
+        <button id="searchBtn">Найти</button>
+    </div>
+    <div id="total"></div>
+    <div id="list" class="list"></div>
+</div>
+<script>
+async function load() {
+    const params = new URLSearchParams();
+    for (const id of ["q", "district", "rooms", "minPrice", "maxPrice", "sort"]) {
+        const value = document.getElementById(id).value.trim();
+        if (value) params.set(id, value);
+    }
+    const response = await fetch(`/api/properties?${params.toString()}`);
+    const data = await response.json();
+    const list = document.getElementById("list");
+    const total = document.getElementById("total");
+    list.innerHTML = "";
+    total.textContent = `Найдено: ${data.total}`;
+    for (const item of data.items) {
+        const card = document.createElement("div");
+        card.className = "item";
+        card.innerHTML = `
+            <h3>${item.title}</h3>
+            <div class="meta">${item.district}, ${item.address}</div>
+            <div class="row">
+                <strong>${item.price}</strong>
+                <button data-id="${item.id}">Открыть</button>
+            </div>
+        `;
+        card.querySelector("button").addEventListener("click", () => {
+            window.location.href = `/miniapp/property?id=${item.id}`;
+        });
+        list.appendChild(card);
+    }
+}
+document.getElementById("searchBtn").addEventListener("click", load);
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Объявление</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --card: #ffffff;
+            --text: #111827;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --border: #d1d5db;
+        }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: linear-gradient(180deg, #ecfeff 0%, var(--bg) 40%);
+            color: var(--text);
+        }
+        .container {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .muted {
+            color: var(--muted);
+        }
+        .images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+        img {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            object-fit: cover;
+        }
+        a {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/miniapp">Назад к поиску</a>
+    <div id="card" class="card"></div>
+</div>
+<script>
+async function load() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    const card = document.getElementById("card");
+    if (!id) {
+        card.innerHTML = "ID не найден.";
+        return;
+    }
+    const response = await fetch(`/api/properties/${id}`);
+    if (!response.ok) {
+        const data = await response.json();
+        card.innerHTML = data.error || "Объявление не найдено";
+        return;
+    }
+    const data = await response.json();
+    const item = data.item;
+
+    const imagesHtml = (item.images || [])
+        .map((img) => {
+            const src = img.startsWith("/uploads/") ? img : "";
+            if (!src) return "";
+            return `<img src="${src}" alt="property image">`;
+        })
+        .join("");
+
+    card.innerHTML = `
+      <h1>${item.title}</h1>
+      <p class="muted">${item.district}, ${item.address}</p>
+      <p>Цена: <strong>${item.price}</strong></p>
+      <p>Комнат: ${item.rooms}</p>
+      <p>Этаж: ${item.floor}/${item.floors_total}</p>
+      <p>Тип: ${item.type}</p>
+      <p>Статус: ${item.status}</p>
+      <p>Контакты: ${item.contact_info || "Не указано"}</p>
+      <p>Условия: ${(item.amenities || []).join(", ") || "Не указано"}</p>
+      <p>${item.description || ""}</p>
+      <div class="images">${imagesHtml}</div>
+    `;
+}
+load();
+</script>
+</body>
+</html>
